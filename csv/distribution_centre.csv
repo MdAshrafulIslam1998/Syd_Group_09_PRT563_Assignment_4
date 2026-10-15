@@ -1,0 +1,3 @@
+DCID,DCName,State,TempCapability
+DC01,Minchinbury DC,NSW,Ambient + Chilled
+DC02,Eastern Creek Chilled DC,NSW,Chilled + Frozen

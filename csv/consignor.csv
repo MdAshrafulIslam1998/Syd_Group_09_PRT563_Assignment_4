@@ -1,0 +1,5 @@
+ConsignorID,ConsignorType,SupplierID,DCID
+CN01,DC,,DC01
+CN02,DC,,DC02
+CN03,Supplier,SUP01,
+CN04,Supplier,SUP02,

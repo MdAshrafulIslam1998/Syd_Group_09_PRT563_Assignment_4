@@ -1,0 +1,4 @@
+StoreID,StoreName,Format,Street,Suburb,State,Postcode,FloorAreaSqm,OpenedDate,RegionCode
+W1042,Chatswood Central,Supermarket,12 Victoria Ave,Chatswood,NSW,2067,3850,2011-03-14,NSW-NORTH
+W1067,St Ives Village,Supermarket,9 Mona Vale Rd,St Ives,NSW,2075,2900,2008-09-02,NSW-NORTH
+W1188,Barangaroo Metro,Metro,3 Hickson Rd,Barangaroo,NSW,2000,760,2019-06-21,NSW-CBD

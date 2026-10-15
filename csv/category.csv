@@ -1,0 +1,26 @@
+CategoryID,CategoryName,CategoryLevel,ParentCategoryID
+A10,Aisle 10 - Dairy,Aisle,
+A11,Aisle 11 - Bakery,Aisle,
+A12,Aisle 12 - Fresh Produce,Aisle,
+A13,Aisle 13 - Pantry,Aisle,
+C10,Milk,Category,A10
+C11,Yoghurt,Category,A10
+C20,Bread,Category,A11
+C30,Fruit,Category,A12
+C31,Vegetables,Category,A12
+C40,Breakfast Cereal,Category,A13
+S10,Full Cream Milk,SubCategory,C10
+S11,Lite Milk,SubCategory,C10
+S20,Sourdough,SubCategory,C20
+S30,Bananas,SubCategory,C30
+A14,Aisle 14 - Frozen,Aisle,
+C12,Cheese,Category,A10
+C13,Eggs & Butter,Category,A10
+C21,Pastries,Category,A11
+C41,Pasta & Sauces,Category,A13
+C42,Spreads,Category,A13
+C43,Coffee & Tea,Category,A13
+C50,Frozen Vegetables,Category,A14
+C51,Ice Cream,Category,A14
+C52,Frozen Meals,Category,A14
+S31,Apples,SubCategory,C30

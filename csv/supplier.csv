@@ -1,0 +1,8 @@
+SupplierID,SupplierName,ABN,ContactEmail,IsDirectToStore
+SUP01,Valley Fresh Dairies,11222333444,orders@valleyfresh.example,1
+SUP02,Golden Crust Bakeries,22333444555,supply@goldencrust.example,1
+SUP03,Farm Select Produce,33444555666,sales@farmselect.example,0
+SUP04,Delta Harvest Foods,44555666777,,0
+SUP05,Polar Fresh Foods,55666777888,orders@polarfresh.example,0
+SUP06,Bean Street Roasters,66777888999,trade@beanstreet.example,0
+SUP07,Sunny Hens Farms,77888999000,,0

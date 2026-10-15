@@ -1,0 +1,7 @@
+DeptID,DeptName,TempZone
+D01,Fresh Produce,Chilled
+D02,Bakery,Ambient
+D03,Dairy & Chilled,Chilled
+D04,Packaged Grocery,Ambient
+D05,Frozen,Frozen
+D06,Front End,Ambient

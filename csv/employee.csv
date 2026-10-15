@@ -1,0 +1,17 @@
+EmployeeID,FirstName,LastName,HomeStoreID,DeptID,Role,EmploymentType,HireDate,SupervisorID
+E001,Priya,Nair,W1042,D06,Store Manager,Permanent,2016-02-15,
+E002,Daniel,Okafor,W1042,D01,Department Manager,Permanent,2018-07-09,E001
+E003,Mei,Lin,W1042,D03,Team Member,PartTime,2022-03-21,E002
+E004,Tomas,Reyes,W1042,D06,Team Member,Casual,2024-11-04,E001
+E005,Hannah,Boyd,W1067,D06,Store Manager,Permanent,2015-05-30,
+E006,Arjun,Shah,W1067,D02,Team Member,PartTime,2023-08-14,E005
+E007,Grace,Whitmore,W1188,D06,Store Manager,Permanent,2019-06-21,
+E008,Leo,Marchetti,W1188,D04,Team Member,Casual,2025-01-19,E007
+E009,Sophie,Nguyen,W1042,D06,Team Member,Casual,2025-03-10,E001
+E010,Jack,Thompson,W1067,D06,Team Member,Casual,2024-07-22,E005
+E011,Olivia,Brown,W1188,D06,Team Member,PartTime,2023-02-13,E007
+E013,Emily,Clarke,W1042,D04,Department Manager,Permanent,2017-04-18,E001
+E012,Ravi,Kumar,W1042,D05,Team Member,PartTime,2022-10-03,E013
+E014,Lucas,Martin,W1067,D01,Team Member,PartTime,2021-11-29,E005
+E015,Isabella,Lee,W1067,D03,Team Member,Casual,2025-05-05,E005
+E016,Noah,Walker,W1188,D01,Team Member,Casual,2024-12-02,E007

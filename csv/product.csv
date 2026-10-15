@@ -1,0 +1,37 @@
+ProductID,GTIN,Description,Brand,PackSize,UnitOfMeasure,IsOwnBrand,ProductType,CategoryID,DeptID
+P100,9312345000101,Full Cream Milk 2L,Valley Fresh,2L,Litre,0,Perishable,S10,D03
+P101,9312345000118,Lite Milk 2L,Valley Fresh,2L,Litre,0,Perishable,S11,D03
+P102,9312345000125,Greek Yoghurt 1kg,Meadow Gold,1kg,Kg,0,Perishable,C11,D03
+P103,9312345000132,Own Brand Milk 3L,Everyday Value,3L,Litre,1,Perishable,S10,D03
+P200,9312345000200,Sourdough Loaf 680g,Golden Crust,680g,Each,0,Perishable,S20,D02
+P201,9312345000217,Multigrain Loaf 700g,Golden Crust,700g,Each,0,Perishable,C20,D02
+P300,9312345000309,Cavendish Bananas,Farm Select,1kg,Kg,0,Perishable,S30,D01
+P301,9312345000316,Truss Tomatoes,Farm Select,1kg,Kg,0,Perishable,C31,D01
+P302,9312345000323,Baby Spinach 120g,Farm Select,120g,Each,0,Perishable,C31,D01
+P400,9312345000408,Corn Flakes 725g,Sunrise Foods,725g,Each,0,Packaged,C40,D04
+P401,9312345000415,Muesli Toasted 750g,Sunrise Foods,750g,Each,0,Packaged,C40,D04
+P402,9312345000422,Own Brand Oats 1kg,Everyday Value,1kg,Kg,1,Packaged,C40,D04
+P403,9312345000439,Long Grain Rice 5kg,Delta Harvest,5kg,Kg,0,Packaged,A13,D04
+P404,9312345000446,Pasta Penne 500g,Delta Harvest,500g,Each,0,Packaged,A13,D04
+P405,9312345000453,Olive Oil 1L,Delta Harvest,1L,Litre,0,Packaged,A13,D04
+P104,9312345001040,Tasty Cheese Block 500g,Meadow Gold,500g,Each,0,Perishable,C12,D03
+P105,9312345001057,Free Range Eggs 12pk,Sunny Hens,12pk,Each,0,Perishable,C13,D03
+P106,9312345001064,Salted Butter 250g,Valley Fresh,250g,Each,0,Perishable,C13,D03
+P107,9312345001071,Own Brand Greek Yoghurt 1kg,Everyday Value,1kg,Kg,1,Perishable,C11,D03
+P202,9312345002023,Butter Croissants 4pk,Golden Crust,4pk,Each,0,Perishable,C21,D02
+P203,9312345002030,Own Brand White Bread 700g,Everyday Value,700g,Each,1,Perishable,C20,D02
+P204,9312345002047,Wholemeal Wraps 8pk,Golden Crust,8pk,Each,0,Perishable,C20,D02
+P303,9312345003037,Pink Lady Apples 1kg,Farm Select,1kg,Kg,0,Perishable,S31,D01
+P304,9312345003044,Hass Avocados 4pk,Farm Select,4pk,Each,0,Perishable,C31,D01
+P305,9312345003051,Brushed Potatoes 2kg,Farm Select,2kg,Kg,0,Perishable,C31,D01
+P306,9312345003068,Carrots 1kg,Farm Select,1kg,Kg,0,Perishable,C31,D01
+P406,9312345004065,Pasta Sauce Tomato Basil 500g,Delta Harvest,500g,Each,0,Packaged,C41,D04
+P407,9312345004072,Crunchy Peanut Butter 375g,Sunrise Foods,375g,Each,0,Packaged,C42,D04
+P408,9312345004089,Ground Coffee Espresso 200g,Bean Street,200g,Each,0,Packaged,C43,D04
+P409,9312345004096,English Breakfast Tea 100pk,Bean Street,100pk,Each,0,Packaged,C43,D04
+P410,9312345004102,Own Brand Spaghetti 500g,Everyday Value,500g,Each,1,Packaged,C41,D04
+P411,9312345004119,Diced Tomatoes 400g,Delta Harvest,400g,Each,0,Packaged,A13,D04
+P500,9312345005000,Frozen Garden Peas 1kg,Polar Fresh,1kg,Kg,0,Packaged,C50,D05
+P501,9312345005017,Vanilla Ice Cream 2L,Polar Fresh,2L,Litre,0,Packaged,C51,D05
+P502,9312345005024,Margherita Pizza 400g,Polar Fresh,400g,Each,0,Packaged,C52,D05
+P503,9312345005031,Own Brand Mixed Vegetables 1kg,Everyday Value,1kg,Kg,1,Packaged,C50,D05
