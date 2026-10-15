@@ -1,0 +1,107 @@
+// PRT563 Assessment 4 - Syd_Group_09 - Task 3: Cypher queries
+
+// Query 1: Deliveries still on the way
+MATCH (d:Delivery {status: 'InTransit'})-[:RECEIVED_AT]->(s:Store),
+      (d)-[:SENT_BY]->(c:Consignor)
+RETURN d.deliveryId AS delivery,
+       s.storeName AS store,
+       d.scheduledDate AS scheduledDate,
+       coalesce(c.supplierName, c.dcName) AS sentBy,
+       CASE WHEN c:Supplier THEN 'Direct to store' ELSE 'Distribution centre' END AS route,
+       d.totalCartons AS cartons
+ORDER BY scheduledDate, store, delivery;
+
+// Query 2: Low-stock reorder list
+WITH date('2026-09-20') AS today
+MATCH (s:Store)-[h:HOLDS]->(p:Product)
+WHERE h.qtyOnHand < h.minDisplayQty
+MATCH (sup:Supplier)-[:SUPPLIES]->(sa:SupplyArrangement)-[:OF_PRODUCT]->(p),
+      (sa)-[:VIA_DC]->(dc:DistributionCentre)
+WITH today, s, p, h, sup, sa, dc,
+     toInteger(ceil(toFloat(h.shelfCapacity - h.qtyOnHand) / sa.cartonQty)) AS cartons
+RETURN s.storeName AS store,
+       p.description AS product,
+       h.qtyOnHand AS onHand,
+       h.minDisplayQty AS minDisplay,
+       cartons AS cartonsToOrder,
+       round(cartons * sa.cartonQty * sa.costPriceExGST, 2) AS orderCostExGST,
+       sup.supplierName AS supplier,
+       CASE WHEN sup.isDirectToStore THEN 'Direct to store' ELSE dc.dcName END AS route,
+       today + duration({days: sa.leadTimeDays}) AS expectedArrival,
+       EXISTS {
+         MATCH (s)<-[:RAISED_BY]-(o:ReplenishmentOrder {orderStatus: 'Open'})-[:ORDERS]->(p)
+       } AS alreadyOnOrder
+ORDER BY expectedArrival, store, product;
+
+// Query 3: Weekly sales by aisle
+MATCH (sale:Sale)-[sold:SOLD]->(p:Product)-[:CLASSIFIED_AS]->(c:Category),
+      (sale)-[ch:CHARGED_AT]->(price:Price)
+WHERE ch.lineNo = sold.lineNo
+  AND sale.saleDateTime >= localdatetime('2026-09-07T00:00')
+MATCH (aisle:Category {categoryLevel: 'Aisle'})-[:PARENT_OF]->{0,2}(c)
+WITH aisle,
+     date.truncate('week', sale.saleDateTime) AS weekStarting,
+     sold.quantity * sold.unitPriceCharged AS lineValue,
+     sold.quantity AS units,
+     price.priceType AS priceType
+WITH aisle, weekStarting,
+     sum(lineValue) AS revenue,
+     sum(units) AS units,
+     sum(CASE priceType WHEN 'Promotional' THEN lineValue ELSE 0 END) AS promoRevenue,
+     sum(CASE priceType WHEN 'Markdown' THEN lineValue ELSE 0 END) AS markdownRevenue
+ORDER BY aisle.categoryId, weekStarting
+WITH aisle, collect({week: weekStarting, revenue: revenue, units: units,
+                     promo: promoRevenue, markdown: markdownRevenue}) AS weeks
+UNWIND range(0, size(weeks) - 1) AS i
+WITH aisle, weeks[i] AS w, CASE WHEN i > 0 THEN weeks[i - 1].revenue END AS previousRevenue
+RETURN aisle.categoryName AS aisle,
+       w.week AS weekStarting,
+       w.units AS units,
+       round(w.revenue, 2) AS revenue,
+       round(100.0 * w.promo / w.revenue, 1) AS promoSharePct,
+       round(100.0 * w.markdown / w.revenue, 1) AS markdownSharePct,
+       round(100.0 * (w.revenue - previousRevenue) / previousRevenue, 1) AS weekOnWeekPct
+ORDER BY aisle, weekStarting;
+
+// Query 4: Why did the shelf run low?
+WITH date('2026-09-20') AS today
+MATCH (s:Store)-[h:HOLDS]->(p:Product)
+WHERE h.qtyOnHand < h.minDisplayQty
+CALL (s, p) {
+  MATCH (s)<-[:MADE_AT]-(:Sale)-[sold:SOLD]->(p)
+  RETURN sum(sold.quantity) AS unitsSold
+}
+CALL (s, p) {
+  MATCH (s)<-[:RECEIVED_AT]-(:Delivery {status: 'Received'})-[dl:DELIVERED]->(p)
+  RETURN sum(dl.qtyDelivered - dl.qtyRejected) AS unitsReceived,
+         sum(dl.qtyRejected) AS unitsRejected
+}
+CALL (s, p) {
+  MATCH (s)<-[:AT_STORE]-(w:Wastage)-[:OF_PRODUCT]->(p)
+  RETURN sum(w.qtyWritten) AS unitsWasted
+}
+CALL (s, p, today) {
+  MATCH (s)<-[:RAISED_BY]-(o:ReplenishmentOrder)-[:ORDERS]->(p)
+  OPTIONAL MATCH (o)<-[:FULFILS]-(d:Delivery)
+  RETURN count(DISTINCT o) AS ordersRaised,
+         count(DISTINCT CASE WHEN o.orderStatus IN ['PartFilled', 'Cancelled'] THEN o END) AS shortOrders,
+         count(DISTINCT CASE WHEN o.orderStatus <> 'Cancelled' AND o.requiredDate < today
+                              AND (d IS NULL OR d.status = 'InTransit'
+                                   OR date(d.arrivalDateTime) > o.requiredDate) THEN o END) AS lateOrders
+}
+WITH s, p, h, today, unitsSold, unitsReceived, unitsRejected, unitsWasted, ordersRaised, shortOrders, lateOrders,
+     duration.inDays(date(h.lastCountedAt), today).days AS daysSinceCount
+RETURN s.storeName AS store,
+       p.description AS product,
+       h.qtyOnHand AS onHand,
+       unitsSold, unitsReceived, unitsWasted, unitsRejected, ordersRaised, shortOrders, lateOrders, daysSinceCount,
+       CASE
+         WHEN lateOrders > 0 THEN 'Late delivery'
+         WHEN shortOrders > 0 OR unitsRejected > 0 THEN 'Short or rejected supply'
+         WHEN ordersRaised = 0 AND unitsReceived = 0 AND unitsSold > 0 THEN 'No replenishment order'
+         WHEN unitsWasted * 4 > unitsSold THEN 'High wastage'
+         WHEN unitsSold > unitsReceived THEN 'Demand above supply'
+         WHEN daysSinceCount > 7 THEN 'Stock count out of date'
+         ELSE 'Unexplained loss - recount'
+       END AS likelyCause
+ORDER BY store, product;

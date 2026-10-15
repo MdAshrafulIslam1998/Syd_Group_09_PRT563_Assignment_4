@@ -1,0 +1,274 @@
+// PRT563 Assessment 4 - Syd_Group_09 - Task 2: import script
+
+// Constraints
+CREATE CONSTRAINT store_id IF NOT EXISTS FOR (n:Store) REQUIRE n.storeId IS UNIQUE;
+CREATE CONSTRAINT department_id IF NOT EXISTS FOR (n:Department) REQUIRE n.deptId IS UNIQUE;
+CREATE CONSTRAINT day_name IF NOT EXISTS FOR (n:Day) REQUIRE n.name IS UNIQUE;
+CREATE CONSTRAINT category_id IF NOT EXISTS FOR (n:Category) REQUIRE n.categoryId IS UNIQUE;
+CREATE CONSTRAINT product_id IF NOT EXISTS FOR (n:Product) REQUIRE n.productId IS UNIQUE;
+CREATE CONSTRAINT product_gtin IF NOT EXISTS FOR (n:Product) REQUIRE n.gtin IS UNIQUE;
+CREATE CONSTRAINT supplier_id IF NOT EXISTS FOR (n:Supplier) REQUIRE n.supplierId IS UNIQUE;
+CREATE CONSTRAINT dc_id IF NOT EXISTS FOR (n:DistributionCentre) REQUIRE n.dcId IS UNIQUE;
+CREATE CONSTRAINT consignor_id IF NOT EXISTS FOR (n:Consignor) REQUIRE n.consignorId IS UNIQUE;
+CREATE CONSTRAINT arrangement_id IF NOT EXISTS FOR (n:SupplyArrangement) REQUIRE n.arrangementId IS UNIQUE;
+CREATE CONSTRAINT order_id IF NOT EXISTS FOR (n:ReplenishmentOrder) REQUIRE n.orderId IS UNIQUE;
+CREATE CONSTRAINT delivery_id IF NOT EXISTS FOR (n:Delivery) REQUIRE n.deliveryId IS UNIQUE;
+CREATE CONSTRAINT wastage_id IF NOT EXISTS FOR (n:Wastage) REQUIRE n.wastageId IS UNIQUE;
+CREATE CONSTRAINT employee_id IF NOT EXISTS FOR (n:Employee) REQUIRE n.employeeId IS UNIQUE;
+CREATE CONSTRAINT shift_id IF NOT EXISTS FOR (n:Shift) REQUIRE n.shiftId IS UNIQUE;
+CREATE CONSTRAINT member_id IF NOT EXISTS FOR (n:LoyaltyMember) REQUIRE n.memberId IS UNIQUE;
+CREATE CONSTRAINT price_id IF NOT EXISTS FOR (n:Price) REQUIRE n.priceId IS UNIQUE;
+CREATE CONSTRAINT sale_id IF NOT EXISTS FOR (n:Sale) REQUIRE n.saleId IS UNIQUE;
+
+// Indexes
+CREATE INDEX sale_datetime IF NOT EXISTS FOR (n:Sale) ON (n.saleDateTime);
+CREATE INDEX sale_channel IF NOT EXISTS FOR (n:Sale) ON (n.channel);
+CREATE INDEX order_status IF NOT EXISTS FOR (n:ReplenishmentOrder) ON (n.orderStatus);
+CREATE INDEX wastage_reason IF NOT EXISTS FOR (n:Wastage) ON (n.reasonCode);
+CREATE INDEX shift_date IF NOT EXISTS FOR (n:Shift) ON (n.shiftDate);
+CREATE INDEX product_brand IF NOT EXISTS FOR (n:Product) ON (n.brand);
+CREATE INDEX price_type_from IF NOT EXISTS FOR (n:Price) ON (n.priceType, n.effectiveFrom);
+CREATE INDEX delivery_status_date IF NOT EXISTS FOR (n:Delivery) ON (n.status, n.scheduledDate);
+CREATE TEXT INDEX product_description_text IF NOT EXISTS FOR (n:Product) ON (n.description);
+CREATE FULLTEXT INDEX product_search IF NOT EXISTS FOR (n:Product) ON EACH [n.description, n.brand];
+CREATE INDEX sold_quantity IF NOT EXISTS FOR ()-[r:SOLD]-() ON (r.quantity);
+CREATE INDEX holds_qty_on_hand IF NOT EXISTS FOR ()-[r:HOLDS]-() ON (r.qtyOnHand);
+
+// Nodes
+LOAD CSV WITH HEADERS FROM 'file:///store.csv' AS row
+MERGE (s:Store {storeId: row.StoreID})
+SET s.storeName = row.StoreName, s.format = row.Format, s.street = row.Street,
+    s.suburb = row.Suburb, s.state = row.State, s.postcode = row.Postcode,
+    s.floorAreaSqm = toInteger(row.FloorAreaSqm), s.openedDate = date(row.OpenedDate),
+    s.regionCode = row.RegionCode;
+
+LOAD CSV WITH HEADERS FROM 'file:///department.csv' AS row
+MERGE (d:Department {deptId: row.DeptID})
+SET d.deptName = row.DeptName, d.tempZone = row.TempZone;
+
+UNWIND [['Mon', 1], ['Tue', 2], ['Wed', 3], ['Thu', 4], ['Fri', 5], ['Sat', 6], ['Sun', 7]] AS d
+MERGE (day:Day {name: d[0]})
+SET day.dayOrder = d[1];
+
+LOAD CSV WITH HEADERS FROM 'file:///category.csv' AS row
+MERGE (c:Category {categoryId: row.CategoryID})
+SET c.categoryName = row.CategoryName, c.categoryLevel = row.CategoryLevel;
+
+LOAD CSV WITH HEADERS FROM 'file:///product.csv' AS row
+MERGE (p:Product {productId: row.ProductID})
+SET p.gtin = row.GTIN, p.description = row.Description, p.brand = row.Brand,
+    p.packSize = row.PackSize, p.unitOfMeasure = row.UnitOfMeasure,
+    p.isOwnBrand = (row.IsOwnBrand = '1');
+
+LOAD CSV WITH HEADERS FROM 'file:///perishable_product.csv' AS row
+MATCH (p:Product {productId: row.ProductID})
+SET p:Perishable, p.shelfLifeDays = toInteger(row.ShelfLifeDays),
+    p.storageTempC = toFloat(row.StorageTempC), p.markdownEligible = (row.MarkdownEligible = '1');
+
+LOAD CSV WITH HEADERS FROM 'file:///packaged_product.csv' AS row
+MATCH (p:Product {productId: row.ProductID})
+SET p:Packaged, p.bestBeforeMonths = toInteger(row.BestBeforeMonths),
+    p.countryOfOrigin = row.CountryOfOrigin;
+
+LOAD CSV WITH HEADERS FROM 'file:///supplier.csv' AS row
+MERGE (s:Supplier {supplierId: row.SupplierID})
+SET s.supplierName = row.SupplierName, s.abn = row.ABN, s.contactEmail = row.ContactEmail,
+    s.isDirectToStore = (row.IsDirectToStore = '1');
+
+LOAD CSV WITH HEADERS FROM 'file:///distribution_centre.csv' AS row
+MERGE (dc:DistributionCentre {dcId: row.DCID})
+SET dc.dcName = row.DCName, dc.state = row.State, dc.tempCapability = row.TempCapability;
+
+LOAD CSV WITH HEADERS FROM 'file:///consignor.csv' AS row
+OPTIONAL MATCH (s:Supplier {supplierId: row.SupplierID})
+OPTIONAL MATCH (dc:DistributionCentre {dcId: row.DCID})
+WITH row, coalesce(s, dc) AS c
+SET c:Consignor, c.consignorId = row.ConsignorID, c.consignorType = row.ConsignorType;
+
+LOAD CSV WITH HEADERS FROM 'file:///supply_arrangement.csv' AS row
+MATCH (s:Supplier {supplierId: row.SupplierID})
+MATCH (p:Product {productId: row.ProductID})
+MATCH (dc:DistributionCentre {dcId: row.DCID})
+MERGE (sa:SupplyArrangement {arrangementId: row.SupplierID + '-' + row.ProductID + '-' + row.DCID})
+SET sa.costPriceExGST = toFloat(row.CostPriceExGST), sa.cartonQty = toInteger(row.CartonQty),
+    sa.leadTimeDays = toInteger(row.LeadTimeDays), sa.agreementStart = date(row.AgreementStart)
+MERGE (s)-[:SUPPLIES]->(sa)
+MERGE (sa)-[:OF_PRODUCT]->(p)
+MERGE (sa)-[:VIA_DC]->(dc);
+
+LOAD CSV WITH HEADERS FROM 'file:///employee.csv' AS row
+MERGE (e:Employee {employeeId: row.EmployeeID})
+SET e.firstName = row.FirstName, e.lastName = row.LastName, e.role = row.Role,
+    e.employmentType = row.EmploymentType, e.hireDate = date(row.HireDate);
+
+LOAD CSV WITH HEADERS FROM 'file:///shift.csv' AS row
+MERGE (sh:Shift {shiftId: row.ShiftID})
+SET sh.shiftDate = date(row.ShiftDate), sh.startTime = localtime(row.StartTime),
+    sh.endTime = localtime(row.EndTime), sh.breakMinutes = toInteger(row.BreakMinutes);
+
+LOAD CSV WITH HEADERS FROM 'file:///loyalty_member.csv' AS row
+MERGE (m:LoyaltyMember {memberId: row.MemberID})
+SET m.firstName = row.FirstName, m.lastName = row.LastName, m.email = row.Email,
+    m.joinDate = date(row.JoinDate), m.pointsBalance = toInteger(row.PointsBalance);
+
+LOAD CSV WITH HEADERS FROM 'file:///replenishment_order.csv' AS row
+MERGE (o:ReplenishmentOrder {orderId: row.OrderID})
+SET o.qtyOrdered = toInteger(row.QtyOrdered),
+    o.raisedDateTime = localdatetime(replace(row.RaisedDateTime, ' ', 'T')),
+    o.requiredDate = date(row.RequiredDate), o.orderStatus = row.OrderStatus;
+
+LOAD CSV WITH HEADERS FROM 'file:///delivery.csv' AS row
+MERGE (d:Delivery {deliveryId: row.DeliveryID})
+SET d.scheduledDate = date(row.ScheduledDate),
+    d.arrivalDateTime = CASE WHEN row.ArrivalDateTime IS NULL THEN null
+                             ELSE localdatetime(replace(row.ArrivalDateTime, ' ', 'T')) END,
+    d.status = row.Status, d.totalCartons = toInteger(row.TotalCartons);
+
+LOAD CSV WITH HEADERS FROM 'file:///wastage.csv' AS row
+MERGE (w:Wastage {wastageId: row.WastageID})
+SET w.wastageDateTime = localdatetime(replace(row.WastageDateTime, ' ', 'T')),
+    w.qtyWritten = toInteger(row.QtyWritten), w.reasonCode = row.ReasonCode,
+    w.costValue = toFloat(row.CostValue);
+
+LOAD CSV WITH HEADERS FROM 'file:///price.csv' AS row
+MERGE (pr:Price {priceId: row.PriceID})
+SET pr.priceType = row.PriceType, pr.amount = toFloat(row.Amount),
+    pr.effectiveFrom = date(row.EffectiveFrom),
+    pr.effectiveTo = CASE WHEN row.EffectiveTo IS NULL THEN null ELSE date(row.EffectiveTo) END;
+
+LOAD CSV WITH HEADERS FROM 'file:///sale.csv' AS row
+MERGE (sa:Sale {saleId: row.SaleID})
+SET sa.saleDateTime = localdatetime(replace(row.SaleDateTime, ' ', 'T')),
+    sa.channel = row.Channel, sa.tenderType = row.TenderType;
+
+// Relationships
+LOAD CSV WITH HEADERS FROM 'file:///store_department.csv' AS row
+MATCH (s:Store {storeId: row.StoreID})
+MATCH (d:Department {deptId: row.DeptID})
+MERGE (s)-[:CONTAINS]->(d);
+
+LOAD CSV WITH HEADERS FROM 'file:///store_trading_hours.csv' AS row
+MATCH (s:Store {storeId: row.StoreID})
+MATCH (d:Day {name: row.DayOfWeek})
+MERGE (s)-[r:OPEN_ON]->(d)
+SET r.openTime = localtime(row.OpenTime), r.closeTime = localtime(row.CloseTime);
+
+LOAD CSV WITH HEADERS FROM 'file:///category.csv' AS row
+WITH row WHERE row.ParentCategoryID IS NOT NULL
+MATCH (child:Category {categoryId: row.CategoryID})
+MATCH (parent:Category {categoryId: row.ParentCategoryID})
+MERGE (parent)-[:PARENT_OF]->(child);
+
+LOAD CSV WITH HEADERS FROM 'file:///product.csv' AS row
+MATCH (p:Product {productId: row.ProductID})
+MATCH (c:Category {categoryId: row.CategoryID})
+MATCH (d:Department {deptId: row.DeptID})
+MERGE (p)-[:CLASSIFIED_AS]->(c)
+MERGE (p)-[:SOLD_IN]->(d);
+
+LOAD CSV WITH HEADERS FROM 'file:///stock_holding.csv' AS row
+MATCH (s:Store {storeId: row.StoreID})
+MATCH (p:Product {productId: row.ProductID})
+MERGE (s)-[r:HOLDS]->(p)
+SET r.qtyOnHand = toInteger(row.QtyOnHand), r.shelfCapacity = toInteger(row.ShelfCapacity),
+    r.shelfLocation = row.ShelfLocation, r.minDisplayQty = toInteger(row.MinDisplayQty),
+    r.lastCountedAt = CASE WHEN row.LastCountedAt IS NULL THEN null
+                           ELSE localdatetime(replace(row.LastCountedAt, ' ', 'T')) END;
+
+LOAD CSV WITH HEADERS FROM 'file:///employee.csv' AS row
+MATCH (e:Employee {employeeId: row.EmployeeID})
+MATCH (s:Store {storeId: row.HomeStoreID})
+MATCH (d:Department {deptId: row.DeptID})
+MERGE (e)-[:BASED_AT]->(s)
+MERGE (e)-[:WORKS_IN]->(d);
+
+LOAD CSV WITH HEADERS FROM 'file:///employee.csv' AS row
+WITH row WHERE row.SupervisorID IS NOT NULL
+MATCH (e:Employee {employeeId: row.EmployeeID})
+MATCH (boss:Employee {employeeId: row.SupervisorID})
+MERGE (boss)-[:SUPERVISES]->(e);
+
+LOAD CSV WITH HEADERS FROM 'file:///shift.csv' AS row
+MATCH (sh:Shift {shiftId: row.ShiftID})
+MATCH (e:Employee {employeeId: row.EmployeeID})
+MATCH (s:Store {storeId: row.StoreID})
+MATCH (d:Department {deptId: row.DeptID})
+MERGE (sh)-[:WORKED_BY]->(e)
+MERGE (sh)-[:AT_STORE]->(s)
+MERGE (sh)-[:IN_DEPARTMENT]->(d);
+
+LOAD CSV WITH HEADERS FROM 'file:///loyalty_member.csv' AS row
+WITH row WHERE row.HomeStoreID IS NOT NULL
+MATCH (m:LoyaltyMember {memberId: row.MemberID})
+MATCH (s:Store {storeId: row.HomeStoreID})
+MERGE (m)-[:HAS_HOME_STORE]->(s);
+
+LOAD CSV WITH HEADERS FROM 'file:///replenishment_order.csv' AS row
+MATCH (o:ReplenishmentOrder {orderId: row.OrderID})
+MATCH (s:Store {storeId: row.StoreID})
+MATCH (p:Product {productId: row.ProductID})
+MERGE (o)-[:RAISED_BY]->(s)
+MERGE (o)-[:ORDERS]->(p);
+
+LOAD CSV WITH HEADERS FROM 'file:///delivery.csv' AS row
+MATCH (d:Delivery {deliveryId: row.DeliveryID})
+MATCH (s:Store {storeId: row.StoreID})
+MATCH (c:Consignor {consignorId: row.ConsignorID})
+MERGE (d)-[:RECEIVED_AT]->(s)
+MERGE (d)-[:SENT_BY]->(c);
+
+LOAD CSV WITH HEADERS FROM 'file:///delivery_line.csv' AS row
+MATCH (d:Delivery {deliveryId: row.DeliveryID})
+MATCH (p:Product {productId: row.ProductID})
+MERGE (d)-[r:DELIVERED {lineNo: toInteger(row.LineNo)}]->(p)
+SET r.qtyDelivered = toInteger(row.QtyDelivered), r.qtyRejected = toInteger(row.QtyRejected);
+
+LOAD CSV WITH HEADERS FROM 'file:///delivery_line.csv' AS row
+WITH row WHERE row.OrderID IS NOT NULL
+MATCH (d:Delivery {deliveryId: row.DeliveryID})
+MATCH (o:ReplenishmentOrder {orderId: row.OrderID})
+MERGE (d)-[:FULFILS {lineNo: toInteger(row.LineNo)}]->(o);
+
+LOAD CSV WITH HEADERS FROM 'file:///wastage.csv' AS row
+MATCH (w:Wastage {wastageId: row.WastageID})
+MATCH (s:Store {storeId: row.StoreID})
+MATCH (p:Product {productId: row.ProductID})
+MATCH (e:Employee {employeeId: row.EmployeeID})
+MERGE (w)-[:AT_STORE]->(s)
+MERGE (w)-[:OF_PRODUCT]->(p)
+MERGE (w)-[:RECORDED_BY]->(e);
+
+LOAD CSV WITH HEADERS FROM 'file:///price.csv' AS row
+MATCH (pr:Price {priceId: row.PriceID})
+MATCH (p:Product {productId: row.ProductID})
+MATCH (s:Store {storeId: row.StoreID})
+MERGE (pr)-[:SET_FOR]->(p)
+MERGE (pr)-[:AT_STORE]->(s);
+
+LOAD CSV WITH HEADERS FROM 'file:///sale.csv' AS row
+MATCH (sa:Sale {saleId: row.SaleID})
+MATCH (s:Store {storeId: row.StoreID})
+MERGE (sa)-[:MADE_AT]->(s);
+
+LOAD CSV WITH HEADERS FROM 'file:///sale.csv' AS row
+WITH row WHERE row.OperatorEmployeeID IS NOT NULL
+MATCH (sa:Sale {saleId: row.SaleID})
+MATCH (e:Employee {employeeId: row.OperatorEmployeeID})
+MERGE (sa)-[:OPERATED_BY]->(e);
+
+LOAD CSV WITH HEADERS FROM 'file:///sale.csv' AS row
+WITH row WHERE row.MemberID IS NOT NULL
+MATCH (sa:Sale {saleId: row.SaleID})
+MATCH (m:LoyaltyMember {memberId: row.MemberID})
+MERGE (sa)-[:SCANNED_BY]->(m);
+
+LOAD CSV WITH HEADERS FROM 'file:///sale_line.csv' AS row
+MATCH (sa:Sale {saleId: row.SaleID})
+MATCH (p:Product {productId: row.ProductID})
+MERGE (sa)-[r:SOLD {lineNo: toInteger(row.LineNo)}]->(p)
+SET r.quantity = toInteger(row.Quantity), r.unitPriceCharged = toFloat(row.UnitPriceCharged);
+
+LOAD CSV WITH HEADERS FROM 'file:///sale_line.csv' AS row
+MATCH (sa:Sale {saleId: row.SaleID})
+MATCH (pr:Price {priceId: row.PriceID})
+MERGE (sa)-[:CHARGED_AT {lineNo: toInteger(row.LineNo)}]->(pr);

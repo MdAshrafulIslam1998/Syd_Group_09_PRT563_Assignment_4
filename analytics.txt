@@ -1,0 +1,183 @@
+// PRT563 Assessment 4 - Syd_Group_09 - Tasks 4 and 5: centrality and similarity algorithms (GDS)
+
+// 0a Check that GDS is installed
+RETURN gds.version() AS graphDataScienceVersion;
+
+// 0b Drop old in-memory graphs (empty list the first time)
+CALL gds.graph.list() YIELD graphName
+CALL gds.graph.drop(graphName) YIELD graphName AS dropped
+RETURN collect(dropped) AS droppedGraphs;
+
+// 4.1 Co-purchase graph
+MATCH (x:Sale)
+WITH count(x) AS baskets
+MATCH (p1:Product)<-[:SOLD]-(s:Sale)-[:SOLD]->(p2:Product)
+WHERE p1.productId < p2.productId
+WITH baskets, p1, p2, count(DISTINCT s) AS together
+WITH p1, p2, together,
+     1.0 * together * baskets / (COUNT { (p1)<-[:SOLD]-() } * COUNT { (p2)<-[:SOLD]-() }) AS lift
+WITH gds.graph.project('basket', p1, p2,
+       {relationshipType: 'BOUGHT_WITH',
+        relationshipProperties: {together: together, lift: lift}},
+       {undirectedRelationshipTypes: ['*']}) AS g
+RETURN g.graphName AS graph, g.nodeCount AS products, g.relationshipCount AS links;
+
+// 4.2 Strong-link graph
+CALL gds.graph.filter('affinity', 'basket', '*', 'r.lift > 1.0 AND r.together >= 3.0')
+YIELD graphName, nodeCount, relationshipCount
+RETURN graphName AS graph, nodeCount AS products, relationshipCount AS links;
+
+// 4.3 Run the six centrality algorithms
+CALL gds.degree.write('basket', {relationshipWeightProperty: 'together', writeProperty: 'cDegree'})
+  YIELD computeMillis AS degreeMs
+CALL gds.pageRank.write('basket', {relationshipWeightProperty: 'together', maxIterations: 100,
+                                   writeProperty: 'cPageRank'})
+  YIELD computeMillis AS pageRankMs, ranIterations AS pageRankIter, didConverge AS pageRankConverged
+CALL gds.articleRank.write('basket', {relationshipWeightProperty: 'together', maxIterations: 100,
+                                     writeProperty: 'cArticleRank'})
+  YIELD computeMillis AS articleRankMs, ranIterations AS articleRankIter
+CALL gds.eigenvector.write('basket', {relationshipWeightProperty: 'together', maxIterations: 100,
+                                     writeProperty: 'cEigenvector'})
+  YIELD computeMillis AS eigenvectorMs, ranIterations AS eigenvectorIter, didConverge AS eigenvectorConverged
+CALL gds.betweenness.write('affinity', {writeProperty: 'cBetweenness'})
+  YIELD computeMillis AS betweennessMs
+CALL gds.closeness.harmonic.write('affinity', {writeProperty: 'cHarmonic'})
+  YIELD computeMillis AS harmonicMs
+RETURN degreeMs, pageRankMs, pageRankIter, pageRankConverged, articleRankMs, articleRankIter,
+       eigenvectorMs, eigenvectorIter, eigenvectorConverged, betweennessMs, harmonicMs;
+
+// 4.4 Centrality scores
+MATCH (p:Product)<-[:SOLD]-(s:Sale)
+MATCH (s)-[line:SOLD]->()
+WITH p, count(DISTINCT s) AS baskets, sum(line.quantity * line.unitPriceCharged) AS basketValueAtRisk
+RETURN p.description AS product,
+       baskets,
+       round(basketValueAtRisk, 2) AS basketValueAtRisk,
+       round(p.cDegree, 1) AS degree,
+       round(p.cPageRank, 3) AS pageRank,
+       round(p.cArticleRank, 3) AS articleRank,
+       round(p.cEigenvector, 3) AS eigenvector,
+       round(p.cBetweenness, 1) AS betweenness,
+       round(p.cHarmonic, 3) AS harmonic
+ORDER BY pageRank DESC
+LIMIT 15;
+
+// 4.5 Compare the algorithms with basket value at risk
+CALL () {
+  MATCH (p:Product)<-[:SOLD]-(s:Sale)
+  MATCH (s)-[line:SOLD]->()
+  WITH p, sum(line.quantity * line.unitPriceCharged) AS basketValueAtRisk
+  ORDER BY basketValueAtRisk DESC
+  RETURN collect(p.productId) AS benchmark
+}
+UNWIND ['cDegree', 'cPageRank', 'cArticleRank', 'cEigenvector', 'cBetweenness', 'cHarmonic'] AS measure
+CALL (measure) {
+  MATCH (p:Product)
+  WITH p ORDER BY p[measure] DESC
+  RETURN collect(p.productId) AS ranking, collect(p.description)[0..5] AS top5
+}
+WITH measure, ranking, top5, benchmark, size(benchmark) AS n
+WITH measure, top5, n, ranking, benchmark,
+     reduce(sumD2 = 0.0, i IN range(0, n - 1) |
+       sumD2 + (i - [j IN range(0, n - 1) WHERE ranking[j] = benchmark[i]][0]) ^ 2) AS sumD2
+RETURN substring(measure, 1) AS algorithm,
+       round(1 - 6 * sumD2 / (n * (n * n - 1)), 3) AS spearmanRho,
+       size([x IN ranking[0..10] WHERE x IN benchmark[0..10]]) AS top10Overlap,
+       top5 AS top5Products
+ORDER BY spearmanRho DESC;
+
+// 5.1 Member-product graph
+MATCH (m:LoyaltyMember)<-[:SCANNED_BY]-(:Sale)-[sold:SOLD]->(p:Product)
+WITH m, p, sum(sold.quantity) AS qty
+WITH gds.graph.project('shopping', m, p,
+       {sourceNodeLabels: 'LoyaltyMember', targetNodeLabels: 'Product',
+        relationshipType: 'BOUGHT', relationshipProperties: {qty: qty}},
+       {undirectedRelationshipTypes: ['*']}) AS g
+RETURN g.graphName AS graph, g.nodeCount AS nodes, g.relationshipCount AS links;
+
+// 5.2 Run the four similarity algorithms
+CALL gds.nodeSimilarity.filtered.mutate('shopping', {
+       relationshipTypes: ['BOUGHT'],
+       sourceNodeFilter: 'LoyaltyMember', targetNodeFilter: 'LoyaltyMember',
+       similarityMetric: 'JACCARD', topK: 5,
+       mutateRelationshipType: 'SIM_JACCARD', mutateProperty: 'score'})
+  YIELD relationshipsWritten AS jaccardPairs, computeMillis AS jaccardMs
+CALL gds.nodeSimilarity.filtered.mutate('shopping', {
+       relationshipTypes: ['BOUGHT'],
+       sourceNodeFilter: 'LoyaltyMember', targetNodeFilter: 'LoyaltyMember',
+       similarityMetric: 'OVERLAP', topK: 5,
+       mutateRelationshipType: 'SIM_OVERLAP', mutateProperty: 'score'})
+  YIELD relationshipsWritten AS overlapPairs, computeMillis AS overlapMs
+CALL gds.nodeSimilarity.filtered.mutate('shopping', {
+       relationshipTypes: ['BOUGHT'],
+       sourceNodeFilter: 'LoyaltyMember', targetNodeFilter: 'LoyaltyMember',
+       similarityMetric: 'COSINE', relationshipWeightProperty: 'qty', topK: 5,
+       mutateRelationshipType: 'SIM_COSINE', mutateProperty: 'score'})
+  YIELD relationshipsWritten AS cosinePairs, computeMillis AS cosineMs
+CALL gds.fastRP.mutate('shopping', {
+       relationshipTypes: ['BOUGHT'], embeddingDimension: 64, relationshipWeightProperty: 'qty',
+       iterationWeights: [0.0, 1.0, 1.0], randomSeed: 42, mutateProperty: 'embedding'})
+  YIELD computeMillis AS fastRPMs
+CALL gds.knn.mutate('shopping', {
+       nodeLabels: ['LoyaltyMember'], nodeProperties: ['embedding'], topK: 5,
+       sampleRate: 1.0, deltaThreshold: 0.0, randomSeed: 42, concurrency: 1,
+       mutateRelationshipType: 'SIM_KNN', mutateProperty: 'score'})
+  YIELD relationshipsWritten AS knnPairs, computeMillis AS knnMs
+RETURN jaccardPairs, jaccardMs, overlapPairs, overlapMs, cosinePairs, cosineMs, fastRPMs, knnPairs, knnMs;
+
+// 5.3 Look-alikes of member M0002
+CALL gds.graph.relationshipProperty.stream('shopping', 'score',
+       ['SIM_JACCARD', 'SIM_OVERLAP', 'SIM_COSINE', 'SIM_KNN'])
+  YIELD sourceNodeId, targetNodeId, relationshipType, propertyValue
+WITH gds.util.asNode(sourceNodeId) AS member, gds.util.asNode(targetNodeId) AS neighbour,
+     relationshipType AS algorithm, propertyValue AS score
+WHERE member.memberId = 'M0002'
+WITH algorithm, neighbour, score
+ORDER BY algorithm, score DESC
+RETURN algorithm,
+       collect(neighbour.memberId + ' ' + neighbour.firstName + ' (' + toString(round(score, 2)) + ')') AS top5SimilarMembers;
+
+// 5.4 Accuracy of the similarity algorithms
+WITH {
+  M0001: 'family', M0002: 'breakfast', M0003: 'family', M0004: 'cook', M0005: 'health',
+  M0006: 'family', M0007: 'family', M0008: 'health', M0009: 'budget', M0010: 'breakfast',
+  M0011: 'cook', M0012: 'family', M0013: 'health', M0014: 'budget', M0015: 'breakfast',
+  M0016: 'cook', M0017: 'family', M0018: 'health', M0019: 'budget', M0020: 'breakfast',
+  M0021: 'cook', M0022: 'family', M0023: 'health', M0024: 'budget', M0025: 'breakfast',
+  M0026: 'cook', M0027: 'family', M0028: 'health', M0029: 'budget', M0030: 'breakfast',
+  M0031: 'cook', M0032: 'family', M0033: 'health', M0034: 'budget', M0035: 'breakfast',
+  M0036: 'cook', M0037: 'family', M0038: 'health', M0039: 'budget', M0040: 'breakfast',
+  M0041: 'cook', M0042: 'family', M0043: 'health', M0044: 'budget', M0045: 'breakfast',
+  M0046: 'cook', M0047: 'family', M0048: 'health', M0049: 'budget', M0050: 'breakfast'
+} AS style
+CALL gds.graph.relationshipProperty.stream('shopping', 'score',
+       ['SIM_JACCARD', 'SIM_OVERLAP', 'SIM_COSINE', 'SIM_KNN'])
+  YIELD sourceNodeId, targetNodeId, relationshipType, propertyValue
+WITH style, relationshipType AS algorithm, propertyValue AS score,
+     gds.util.asNode(sourceNodeId).memberId AS member,
+     gds.util.asNode(targetNodeId).memberId AS neighbour
+WITH algorithm, member, avg(score) AS meanScore,
+     avg(CASE WHEN style[member] = style[neighbour] THEN 1.0 ELSE 0.0 END) AS precision
+RETURN algorithm,
+       count(member) AS membersWithNeighbours,
+       round(avg(precision), 3) AS precisionAt5,
+       round(avg(meanScore), 3) AS meanSimilarity
+ORDER BY precisionAt5 DESC;
+
+// 5.5 Offers for member M0002
+CALL gds.graph.relationshipProperty.stream('shopping', 'score', ['SIM_COSINE'])
+  YIELD sourceNodeId, targetNodeId, propertyValue
+WITH gds.util.asNode(sourceNodeId) AS member, gds.util.asNode(targetNodeId) AS peer, propertyValue AS similarity
+WHERE member.memberId = 'M0002'
+MATCH (peer)<-[:SCANNED_BY]-(:Sale)-[:SOLD]->(p:Product)
+WHERE NOT EXISTS { MATCH (member)<-[:SCANNED_BY]-(:Sale)-[:SOLD]->(p) }
+WITH DISTINCT p, peer, similarity
+WITH p, count(peer) AS similarMembersBuying, sum(similarity) AS offerScore
+RETURN p.description AS offerProduct, similarMembersBuying, round(offerScore, 3) AS offerScore
+ORDER BY offerScore DESC, offerProduct
+LIMIT 5;
+
+// Drop the in-memory graphs
+CALL gds.graph.list() YIELD graphName
+CALL gds.graph.drop(graphName) YIELD graphName AS dropped
+RETURN collect(dropped) AS droppedGraphs;
